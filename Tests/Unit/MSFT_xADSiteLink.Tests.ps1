@@ -1,7 +1,7 @@
 ﻿$script:DSCModuleName      = 'xActiveDirectory'
 $script:DSCResourceName = 'MSFT_xADSiteLink'
 
-#region HEADER
+# region HEADER
 
 # Unit Test Template Version: 1.2.0
 $script:moduleRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -18,17 +18,16 @@ $TestEnvironment = Initialize-TestEnvironment `
     -DSCResourceName $script:DSCResourceName `
     -TestType Unit
 
-#endregion HEADER
+# endregion HEADER
 
 # Begin Testing
 try
 {
-    #Invoke-TestSetup
+    # region Pester Tests
 
 
     InModuleScope $script:DSCResourceName {
 
-        #function Get-ADReplicationSiteLink { param ($filter, $properties) }
         $test2008R2Params = @{
             Caption = 'Microsoft Windows Server 2008 R2'
         }
@@ -38,15 +37,6 @@ try
         }
         
         $credential = New-Object System.Management.Automation.PSCredential 'DummyUser', (ConvertTo-SecureString 'DummyPassword' -AsPlainText -Force)
-
-        $testPresentParams = @{
-            SiteLinkName = 'TestSiteLink'
-            DomainAdministratorCredential = $credential
-            Ensure = 'Present'
-        }
-
-        $testAbsentParams = $testPresentParams.Clone()
-        $testAbsentParams['Ensure'] = 'Absent'
 
         $fakeADSiteLink = @{
             Cost = 100
@@ -58,8 +48,17 @@ try
             InterSiteTransportProtocol = 'IP'
         }
 
-        
+        # region Function Get-TargetResource
         Describe 'MSFT_xADSiteLink\Get-TargetResource' {
+            $testPresentParams = @{
+                SiteLinkName = 'TestSiteLink'
+                DomainAdministratorCredential = $credential
+                Ensure = 'Present'
+            }
+
+            $testAbsentParams = $testPresentParams.Clone()
+            $testAbsentParams['Ensure'] = 'Absent'
+            
             Context 'Testing with supported and unsupported OS' {
                 
                 Mock Assert-Module -MockWith { }
@@ -202,7 +201,9 @@ try
                 }
             }
         }
-        
+        # endregion
+
+        # region Function Test-TargetResource
         Describe 'MSFT_xADSiteLink\Test-TargetResource' {
             
             $testTargetResourceParams = @{
@@ -355,7 +356,6 @@ try
                     $isCompliant | Should Be $false
                 }
 
-                # replicationfrequencyinminutes
                 It "Returns 'isCompliant' is 'True' when site link exists and value for 'ReplicationFrequencyInMinutes' matches desired value" {
                     Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResource }
                     $testOptionalResourceParams = $testTargetResourceParams.Clone()
@@ -380,7 +380,6 @@ try
                     $isCompliant | Should Be $true
                 }
 
-                # change notification
                 It "Returns 'isCompliant' is 'True' when site link exists and value for 'ChangeNotification' matches desired value" {
                     $fakeTargetResourceWithOptions = $fakeTargetResource.Clone()
                     $fakeTargetResourceWithOptions['ChangeNotification'] = 5
@@ -401,7 +400,6 @@ try
                     $isCompliant | Should Be $false
                 }
 
-                # replication schedule
                 It "Returns 'isCompliant' is 'True' when site link exists and value for 'ReplicationSchedule' matches when 24x7 is desired" {
                     $24x7Schedule = New-Object -TypeName System.DirectoryServices.ActiveDirectory.ActiveDirectorySchedule
                     $24x7Schedule.SetDailySchedule('Zero','Zero','TwentyThree','FortyFive')
@@ -481,20 +479,277 @@ try
                     $isCompliant | Should Be $false
                 }
             }
-
-
         }
-        <#
+        # endregion
+
+        # region Function Set-TargetResource
         Describe 'MSFT_xADSiteLink\Set-TargetResource' {
-            Context '<Context-description>' {
-                It 'Should ...test-description' {
-                    # test-code
+            
+            $setTargetResourceParams = @{
+                SiteLinkName = 'TestSiteLink'
+                DomainAdministratorCredential = $credential
+            }
+
+            $fakeTargetResource = @{
+                SiteLinkName = 'TestSiteLink'
+                Ensure = 'Present'
+                SitesIncluded = @('FakeSite1','FakeSite2')
+                Description = 'Fake description'
+                DomainAdministratorCredential = $credential
+                DomainController = 'FakeDC.contoso.com'
+                Cost = 100
+                ReplicationFrequencyInMinutes = 15
+            }
+
+            $nonExistantTargetResource = @{
+                SiteLinkName = 'TestSiteLink'
+                Ensure = 'Absent'
+                SitesIncluded = @()
+                Description = ''
+                DomainAdministratorCredential = $credential
+                DomainController = 'FakeDC.contoso.com'
+                Cost = $null
+                ReplicationFrequencyInMinutes = $null
+            }
+
+            Context 'Testing with supported and unsupported OS' {
+                
+                Mock Assert-Module -MockWith { }
+                Mock Get-TargetResource { return [PSCustomObject] $fakeTargetResource }
+
+                $errorMessage = $($LocalisedData.UnsupportedOperatingSystem)
+                
+                It "Throws an unsupported OS error if OS is Windows Server 2008 R2" {
+                    Mock Get-CimInstance { return [PSCustomObject] $test2008R2Params }
+
+                    { $targetResource = Set-TargetResource @setTargetResourceParams } | Should Throw $errorMessage
+                }
+
+                It "Does not throw an unsupported OS error if OS is Windows Server 2016" {
+                    Mock Get-CimInstance { return [PSCustomObject] $test2016Params }
+                    
+                    { $targetResource = Set-TargetResource @setTargetResourceParams } | Should Not Throw $errorMessage
                 }
             }
-        }#>
+
+            Context 'Testing without optional parameters' {
+                It "Calls 'Set-ADReplicationSiteLink' when 'Ensure' is 'Present' and the site link exists" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResource }
+                    Mock Set-ADReplicationSiteLink -MockWith { }
+                    Set-TargetResource @setTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -Scope It
+                }
+
+                It "Calls 'New-ADeplicationSiteLink' when 'Ensure' is 'Present' and the site link does not exist" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $nonExistantTargetResource }
+                    Mock New-ADReplicationSiteLink -MockWith { }
+                    Set-TargetResource @setTargetResourceParams
+                    Assert-MockCalled New-ADReplicationSiteLink -Scope It
+                }
+
+                It "Calls 'Remove-ADeplicationSiteLink' when 'Ensure' is 'Absent' and the site link exists" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResource }
+                    Mock Remove-ADReplicationSiteLink -MockWith { }
+                    $setAbsentTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setAbsentTargetResourceParams['Ensure'] = 'Absent'
+                    Set-TargetResource @setAbsentTargetResourceParams
+                    Assert-MockCalled Remove-ADReplicationSiteLink -Scope It
+                }
+
+                It "Does not call 'New-ADeplicationSiteLink', 'Set-ADeplicationSiteLink' or 'Remove-ADeplicationSiteLink' when 'Ensure' is 'Absent' and the site link does not exist" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $nonExistantTargetResource }
+                    $setAbsentTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setAbsentTargetResourceParams['Ensure'] = 'Absent'
+                    Set-TargetResource @setAbsentTargetResourceParams
+                    Assert-MockCalled New-ADReplicationSiteLink -Scope It -Exactly 0
+                    Assert-MockCalled Set-ADReplicationSiteLink -Scope It -Exactly 0
+                    Assert-MockCalled Remove-ADReplicationSiteLink -Scope It -Exactly 0
+                }
+            }
+
+            Context 'Testing with optional parameters' {
+                It "Calls 'Set-ADReplicationSiteLink' with 'Description' when 'Description' is specified, 'Ensure' is 'Present' and the site link exists but 'Description' does not match" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResource }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $Description -eq 'Desired fake description' } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['Description'] = 'Desired fake description'
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $Description -eq 'Desired fake description' } -Scope It
+                }
+
+                It "Calls 'New-ADReplicationSiteLink' with 'Description' when 'Description' is specified, 'Ensure' is 'Present' and the site link does not exist" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $nonExistantTargetResource }
+                    Mock New-ADReplicationSiteLink -ParameterFilter { $Description -eq 'Desired fake description' } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['Description'] = 'Desired fake description'
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled New-ADReplicationSiteLink -ParameterFilter { $Description -eq 'Desired fake description' } -Scope It
+                }
+
+                It "Calls 'Set-ADReplicationSiteLink' with 'Cost' when 'Cost' is specified, 'Ensure' is 'Present' and the site link exists but 'Cost' does not match" {
+                    $fakeTargetResourceWithOptions = $fakeTargetResource.Clone()
+                    $fakeTargetResourceWithOptions['Cost'] = 50
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResourceWithOptions }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $Cost -eq 100 } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['Cost'] = 100
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $Cost -eq 100 } -Scope It
+                }
+
+                It "Calls 'New-ADReplicationSiteLink' with 'Cost' when 'Cost' is specified, 'Ensure' is 'Present' and the site link does not exist" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $nonExistantTargetResource }
+                    Mock New-ADReplicationSiteLink -ParameterFilter { $Cost -eq 100 } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['Cost'] = 100
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled New-ADReplicationSiteLink -ParameterFilter { $Cost -eq 100 } -Scope It
+                }
+
+                It "Calls 'Set-ADReplicationSiteLink' with 'ReplicationFrequencyInMinutes' when 'ReplicationFrequencyInMinutes' is specified, 'Ensure' is 'Present' and the site link exists but 'ReplicationFrequencyInMinutes' does not match" {
+                    $fakeTargetResourceWithOptions = $fakeTargetResource.Clone()
+                    $fakeTargetResourceWithOptions['ReplicationFrequencyInMinutes'] = 30
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResourceWithOptions }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $ReplicationFrequencyInMinutes -eq 15} -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['ReplicationFrequencyInMinutes'] = 15
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $ReplicationFrequencyInMinutes -eq 15 } -Scope It
+                }
+
+                It "Calls 'New-ADReplicationSiteLink' with 'ReplicationFrequencyInMinutes' when 'ReplicationFrequencyInMinutes' is specified, 'Ensure' is 'Present' and the site link does not exist" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $nonExistantTargetResource }
+                    Mock New-ADReplicationSiteLink -ParameterFilter { $ReplicationFrequencyInMinutes -eq 15 } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['ReplicationFrequencyInMinutes'] = 15
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled New-ADReplicationSiteLink -ParameterFilter { $ReplicationFrequencyInMinutes -eq 15 } -Scope It
+                }
+                
+                It "Calls 'Set-ADReplicationSiteLink' with 'Add' and 'Remove' when 'SitesIncluded' is specified, 'Ensure' is 'Present', the site link exists, a site needs to be added to 'SitesIncluded' and a site needs to be removed from 'SitesIncluded'" {
+                    $fakeTargetResourceWithOptions = $fakeTargetResource.Clone()
+                    $fakeTargetResourceWithOptions['SitesIncluded'] = @('FakeSiteToKeep','FakeSiteToRemove')
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResourceWithOptions }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $SitesIncluded.ContainsKey('Add') -and $SitesIncluded.ContainsKey('Remove') } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['SitesIncluded'] = @('FakeSiteToKeep','FakeSiteToAdd')
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $SitesIncluded.ContainsKey('Add') -and $SitesIncluded.ContainsKey('Remove') } -Scope It
+                }
+
+                It "Calls 'Set-ADReplicationSiteLink' with 'Add' when 'SitesIncluded' is specified, 'Ensure' is 'Present', the site link exists and a site needs to be added to 'SitesIncluded'" {
+                    $fakeTargetResourceWithOptions = $fakeTargetResource.Clone()
+                    $fakeTargetResourceWithOptions['SitesIncluded'] = @('FakeSiteToKeep','FakeSite2ToKeep')
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResourceWithOptions }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $SitesIncluded.ContainsKey('Add') } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['SitesIncluded'] = @('FakeSiteToKeep','FakeSite2ToKeep','FakeSiteToAdd')
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $SitesIncluded.ContainsKey('Add') } -Scope It
+                }
+
+                It "Calls 'Set-ADReplicationSiteLink' with 'Remove' when 'SitesIncluded' is specified, 'Ensure' is 'Present', the site link exists and a site needs to be removed to 'SitesIncluded'" {
+                    $fakeTargetResourceWithOptions = $fakeTargetResource.Clone()
+                    $fakeTargetResourceWithOptions['SitesIncluded'] = @('FakeSiteToKeep','FakeSiteToRemove','FakeSite2ToKeep')
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResourceWithOptions }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $SitesIncluded.ContainsKey('Remove') } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['SitesIncluded'] = @('FakeSiteToKeep','FakeSite2ToKeep')
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $SitesIncluded.ContainsKey('Remove') } -Scope It
+                }
+
+                It "Calls 'New-ADReplicationSiteLink' with 'SitesIncluded' when 'SitesIncluded' is specified, 'Ensure' is 'Present' and the site link does not exist" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $nonExistantTargetResource }
+                    Mock New-ADReplicationSiteLink -ParameterFilter { $SitesIncluded } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['SitesIncluded'] = @('FakeSite1','FakeSite2')
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled New-ADReplicationSiteLink -ParameterFilter { $SitesIncluded } -Scope It
+                }
+
+                It "Calls 'Set-ADReplicationSiteLink' with 'Server' when 'DomainController' is specified, 'Ensure' is 'Present' and the site link exists" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResource }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $Server -eq 'fakedc.contoso.com' } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['DomainController'] = 'fakedc.contoso.com'
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $Server -eq 'fakedc.contoso.com' } -Scope It
+                }
+
+                It "Calls 'New-ADReplicationSiteLink' with 'Server' when 'DomainController' is specified, 'Ensure' is 'Present' and the site link does not exist" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $nonExistantTargetResource }
+                    Mock New-ADReplicationSiteLink -ParameterFilter { $Server -eq 'fakedc.contoso.com' } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['DomainController'] = 'fakedc.contoso.com'
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled New-ADReplicationSiteLink -ParameterFilter { $Server -eq 'fakedc.contoso.com' } -Scope It
+                }
+
+
+                It "Calls 'Set-ADReplicationSiteLink' with 'Replace' when 'ChangeNotification' is '1' or '5', 'Ensure' is 'Present' and the site link exists but 'ChangeNotification' does not match" {
+                    $fakeTargetResourceWithOptions = $fakeTargetResource.Clone()
+                    $fakeTargetResourceWithOptions['ChangeNotification'] = 1
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResourceWithOptions }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $Replace } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['ChangeNotification'] = 5
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $Replace } -Scope It
+                }
+
+                It "Calls 'Set-ADReplicationSiteLink' with 'Clear' when 'ChangeNotification' is '0', 'Ensure' is 'Present' and the site link exists but 'ChangeNotification' does not match" {
+                    $fakeTargetResourceWithOptions = $fakeTargetResource.Clone()
+                    $fakeTargetResourceWithOptions['ChangeNotification'] = 1
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResourceWithOptions }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $Clear } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['ChangeNotification'] = 0
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $Clear } -Scope It
+                }
+
+                It "Calls 'New-ADReplicationSiteLink' with 'OtherAttributes' when 'ChangeNotification' is '1' or '5', 'Ensure' is 'Present' and the site link does not exist" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $nonExistantTargetResource }
+                    Mock New-ADReplicationSiteLink -ParameterFilter { $OtherAttributes } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['ChangeNotification'] = 5
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled New-ADReplicationSiteLink -ParameterFilter { $OtherAttributes } -Scope It
+                }
+
+                It "Calls 'Set-ADReplicationSiteLink' with 'ReplicationSchedule' when 'ReplicationSchedule' is specified, 'Ensure' is 'Present' and the site link exists but 'ReplicationSchedule' does not match" {
+                    $24x7Schedule = New-Object -TypeName System.DirectoryServices.ActiveDirectory.ActiveDirectorySchedule
+                    $24x7Schedule.SetDailySchedule('Zero','Zero','TwentyThree','FortyFive')
+                    $24x7RawSchedule = $24x7Schedule.RawSchedule
+                    $fakeTargetResourceWithOptions = $fakeTargetResource.Clone()
+                    $fakeTargetResourceWithOptions['ReplicationSchedule'] = $24x7RawSchedule
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $fakeTargetResourceWithOptions }
+                    Mock Set-ADReplicationSiteLink -ParameterFilter { $ReplicationSchedule } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['ReplicationSchedule'] = @('Nine','Zero','Sixteen','FortyFive')
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled Set-ADReplicationSiteLink -ParameterFilter { $ReplicationSchedule } -Scope It
+                }
+
+                It "Calls 'New-ADReplicationSiteLink' with 'ReplicationSchedule' when 'ReplicationSchedule' is specified, 'Ensure' is 'Present' and the site link does not exist" {
+                    Mock Get-TargetResource { return [System.Collections.Hashtable] $nonExistantTargetResource }
+                    Mock New-ADReplicationSiteLink -ParameterFilter { $ReplicationSchedule } -MockWith { }
+                    $setOptionalTargetResourceParams = $setTargetResourceParams.Clone()
+                    $setOptionalTargetResourceParams['ReplicationSchedule'] = @('24x7')
+                    Set-TargetResource @setOptionalTargetResourceParams
+                    Assert-MockCalled New-ADReplicationSiteLink -ParameterFilter { $ReplicationSchedule } -Scope It
+                }
+            }
+        }
+        # endregion
     }
+    # endregion
 }
+
 finally
 {
-    #Invoke-TestCleanup
+    # region FOOTER
+    Restore-TestEnvironment -TestEnvironment $TestEnvironment
+    # endregion
 }
