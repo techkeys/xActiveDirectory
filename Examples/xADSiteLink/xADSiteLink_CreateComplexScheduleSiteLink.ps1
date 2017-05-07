@@ -75,7 +75,7 @@ configuration xADSiteLink_CreateComplexScheduleSiteLink
         xADSiteLink CreateTurboSiteLink
         {
             Ensure = 'Present'
-            DomainAdministratorCredential = $DomainCreds
+            EnterpriseAdministratorCredential = $DomainCreds
             SiteLinkName = $SiteLinkName
             SitesIncluded = $SitesIncluded
             Description = $Description

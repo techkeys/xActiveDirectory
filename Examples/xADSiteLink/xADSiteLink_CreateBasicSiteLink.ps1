@@ -48,7 +48,7 @@ configuration xADSiteLink_CreateBasicSiteLink
         xADSiteLink CreateSiteLink
         {
             Ensure = 'Present'
-            DomainAdministratorCredential = $DomainCreds
+            EnterpriseAdministratorCredential = $DomainCreds
             SiteLinkName = $SiteLinkName
             SitesIncluded = $SitesIncluded
             Cost = $Cost
