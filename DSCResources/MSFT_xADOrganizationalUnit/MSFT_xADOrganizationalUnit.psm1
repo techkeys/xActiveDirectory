@@ -12,6 +12,7 @@ data LocalizedData
         OUNotInDesiredState      = OU '{0}' exists but is not in the desired state
         OUExistsButShouldNot     = OU '{0}' exists when it should not exist
         OUDoesNotExistButShould  = OU '{0}' does not exist when it should exist
+        OUDoesNotExist           = OU '{0}' does not exist
 '@
 }
 
@@ -30,7 +31,14 @@ function Get-TargetResource
     
     Assert-Module -ModuleName 'ActiveDirectory';
     Write-Verbose ($LocalizedData.RetrievingOU -f $Name)
-    $ou = Get-ADOrganizationalUnit -Filter { Name -eq $Name } -SearchBase $Path -SearchScope OneLevel -Properties ProtectedFromAccidentalDeletion, Description
+    try 
+    {
+        $ou = Get-ADOrganizationalUnit -Filter { Name -eq $Name } -SearchBase $Path -SearchScope OneLevel -Properties ProtectedFromAccidentalDeletion, Description
+    }
+    catch
+    {
+        Write-Verbose ($LocalizedData.OUDoesNotExist -f $Name)
+    }
 
     $targetResource = @{
         Name = $Name

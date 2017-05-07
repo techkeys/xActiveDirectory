@@ -2,6 +2,7 @@
 class MSFT_xADDomainController : OMI_BaseResource
 {
     [Key] String DomainName;
+    [Write, Description("Specifies whether the site should be present or absent"), ValueMap{"Present","Absent"}, Values{"Present","Absent"}] String Ensure;
     [Required, EmbeddedInstance("MSFT_Credential")] String DomainAdministratorCredential;
     [Required, EmbeddedInstance("MSFT_Credential")] String SafemodeAdministratorPassword;
     [write] String DatabasePath;

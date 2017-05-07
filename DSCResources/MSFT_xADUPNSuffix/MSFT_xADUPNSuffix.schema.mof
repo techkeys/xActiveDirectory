@@ -1,0 +1,8 @@
+[ClassVersion("1.0"), FriendlyName("xADUPNSuffix")]
+class MSFT_xADUPNSuffix : OMI_BaseResource
+{
+    [Key] String UPNSuffix;
+    [Write, Description("Specifies a description of the site link")] String Forest;
+    [Required, EmbeddedInstance("MSFT_Credential")] String EnterpriseAdministratorCredential;
+    [Write, Description("Specifies whether the user account is created or deleted"), ValueMap{"Present", "Absent"},Values{"Present", "Absent"}] String Ensure;
+};

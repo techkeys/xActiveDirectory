@@ -23,7 +23,10 @@ function Get-TargetResource
 
         [String]$SysvolPath,
 
-        [String]$SiteName
+        [String]$SiteName,
+
+        [ValidateSet('Absent','Present')]
+        [String]$Ensure
     )
 
     $returnValue = @{
@@ -90,7 +93,10 @@ function Set-TargetResource
 
         [String]$SysvolPath,
 
-        [String]$SiteName
+        [String]$SiteName,
+
+        [ValidateSet('Absent','Present')]
+        [String]$Ensure
     )
 
     # Debug can pause Install-ADDSDomainController, so we remove it.
@@ -176,7 +182,10 @@ function Test-TargetResource
 
         [String]$SysvolPath,
 
-        [String]$SiteName
+        [String]$SiteName,
+
+        [ValidateSet('Absent','Present')]
+        [String]$Ensure
     )
 
     if ($PSBoundParameters.SiteName)
